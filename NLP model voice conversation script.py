@@ -115,6 +115,9 @@ while True:
 # Cargar archivos de modelos
 cargar_modelos()
 
+# Mensaje de iniciación
+print("Start talking")
+
 # Bucle principal del programa
 while True:
   # 
