@@ -1,12 +1,12 @@
-import pathlib # 
+import pathlib # Manejo de rutas de archivos
 import whisper # Conversión de voz a texto
-import llama # Procesamiento de texto a respuesta
-import openvoice # Conversión de respuesta en texto a voz
+import llama_cpp # Procesamiento de texto a respuesta
+from openvoice import openvoice_cli # Conversión de respuesta en texto a voz
 
 # VARIABLES
-modelo_whisper = ""
-modelo_nlp = ""
-modelo_openvoice = ""
+modelo_whisper = "" # Ruta hacia el archivo .pt
+modelo_llama = "" # Ruta hacia el archivo .gguf
+modelo_openvoice = "" # Ruta hacia el archivo .pth
 
 # FUNCIONES
 # Función para leer texto con OpenVoice
@@ -35,7 +35,7 @@ def leer_respuesta(modelo_openvoice, texto_salida, bool_terminado):
         
 
 # Función para generar respuesta con un modelo Llama
-def generar_respuesta(modelo_nlp, texto_salida):
+def generar_respuesta(modelo_llama, texto_salida):
   # Llama al modelo con los parámetros especificados y retorna la respuesta
     return modelo_val(
         texto_entrada, # El texto de entrada (prompt) que se envía al modelo
@@ -65,7 +65,7 @@ def capturar_voz(modelo_whisper):
   return texto_entrada
 
 # Función para 
-def ciclo_conversacion(modelo_whisper, modelo_nlp, modelo_openvoice)
+def ciclo_conversacion(modelo_whisper, modelo_llama, modelo_openvoice)
   # 1. Esperar hasta capturar voz para convertir a texto
   texto_entrada = capturar_voz(modelo_whisper)
   
@@ -75,7 +75,7 @@ def ciclo_conversacion(modelo_whisper, modelo_nlp, modelo_openvoice)
   bool_terminado = False # Convertir a True al terminar de generar respuesta
   
   # Generar respuesta token por token
-  for token_salida in generar_respuesta(modelo_nlp, texto_salida):
+  for token_salida in generar_respuesta(modelo_llama, texto_salida):
         # Procesar cada token de la respuesta en streaming
         if 'choices' in token_salida:
             token_val = token_salida['choices'][0].get("text", "") # Extraer el texto del token
@@ -89,6 +89,8 @@ def ciclo_conversacion(modelo_whisper, modelo_nlp, modelo_openvoice)
 
 # Función para 
 def cargar_modelos():
+  global modelo_whisper, modelo_llama, modelo_openvoice
+  
   carpeta_modelos = pathlib.Path("models")
     
     # Crear carpeta si no existe
@@ -96,78 +98,79 @@ def cargar_modelos():
         carpeta_modelos.mkdir(exist_ok = True)
 
         input('Place model files in "models" folder and press Enter...')
-    
+
+    # Ruta del archivo
+    archivo_modelo = None
+
     # Buscar y cargar modelos en un bucle infinito hasta encontrarlos
     while True:
-        ####################################### CAMBIAR A SWTICH #######################################
         # 1. Buscar y cargar modelo Whisper
-        archivo_modelo = None
-
-        # Buscar archivos .whisper en la carpeta
-        for archivo_iter in carpeta_modelos.glob("*.whisper"):
-            if archivo_iter.is_file():
-
-                archivo_modelo = archivo_iter # Asignar el primer archivo encontrado
-
-                break
-
-        # Si se encontró un modelo, cargarlo
-        if archivo_modelo:
-          # Cargar modelo Whsiper
-          modelo_whisper = 
-          )
-        else:
-            input('Place a .whisper model in "model" folder and press Enter...')
-
-        # 2. Buscar y cargar modelo NLP
-        archivo_modelo = None
-
-        # Buscar archivos .gguf en la carpeta
-        for archivo_iter in carpeta_modelos.glob("*.gguf"):
-            if archivo_iter.is_file():
-
-                archivo_modelo = archivo_iter # Asignar el primer archivo encontrado
-
-                break
-
-        # Si se encontró un modelo, cargarlo
-        if archivo_modelo:
-          # Cargar modelo NLP
-          modelo_nlp = llama_cpp.Llama(
-                        model_path = str(archivo_modelo), # Ruta del archivo del modelo
-                        n_ctx = 32768, # Tamaño del contexto (memoria del modelo)
-                        n_gpu_layers = -1, # Usar GPU para todas las capas (-1 = todas)
-                        n_threads = os.cpu_count(), # Usar todos los núcleos de la CPU
-                        n_batch = 512, # Tamaño del lote para procesamiento
-                        use_mmap = True, # Usar memory mapping para cargar el modelo
-                        use_mlock = True, # Bloquear memoria para evitar swapping
-                        verbose = False, # No mostrar información detallada durante la carga
-                        f16_kv = True, # Usar precisión float16 para cache de key-value
-                        logits_all = False, # No calcular logits para todos los tokens
-                        vocab_only = False, # No cargar solo el vocabulario
-                        rope_scaling_type = llama_cpp.LLAMA_ROPE_SCALING_TYPE_LINEAR, # Tipo de escalado RoPE
-                    )
+        if not modelo_whisper:
+          # Buscar archivos .pt en la carpeta
+          for archivo_iter in carpeta_modelos.glob("*.pt"):
+              if archivo_iter.is_file():
+  
+                  archivo_modelo = archivo_iter # Asignar el primer archivo encontrado
+  
+                  break
+  
+          # Si se encontró un modelo, cargarlo
+          if archivo_modelo:
+            # Cargar modelo Whsiper
+            modelo_whisper = whisper.load_model(archivo_modelo)
           else:
-            input('Place a .gguf model in "model" folder and press Enter...')
+              input('Place a .pt model in "model" folder and press Enter...')
+
+        # 2. Buscar y cargar modelo LLaMA
+        if not modelo_llama:
+          # Buscar archivos .gguf en la carpeta
+          for archivo_iter in carpeta_modelos.glob("*.gguf"):
+              if archivo_iter.is_file():
+  
+                  archivo_modelo = archivo_iter # Asignar el primer archivo encontrado
+  
+                  break
+  
+          # Si se encontró un modelo, cargarlo
+          if archivo_modelo:
+            # Cargar modelo LLaMA
+            modelo_llama = llama_cpp.Llama(
+                          model_path = str(archivo_modelo), # Ruta del archivo del modelo
+                          n_ctx = 32768, # Tamaño del contexto (memoria del modelo)
+                          n_gpu_layers = -1, # Usar GPU para todas las capas (-1 = todas)
+                          n_threads = os.cpu_count(), # Usar todos los núcleos de la CPU
+                          n_batch = 512, # Tamaño del lote para procesamiento
+                          use_mmap = True, # Usar memory mapping para cargar el modelo
+                          use_mlock = True, # Bloquear memoria para evitar swapping
+                          verbose = False, # No mostrar información detallada durante la carga
+                          f16_kv = True, # Usar precisión float16 para cache de key-value
+                          logits_all = False, # No calcular logits para todos los tokens
+                          vocab_only = False, # No cargar solo el vocabulario
+                          rope_scaling_type = llama_cpp.LLAMA_ROPE_SCALING_TYPE_LINEAR, # Tipo de escalado RoPE
+                      )
+            else:
+              input('Place a .gguf model in "model" folder and press Enter...')
 
         # 3. Buscar y cargar modelo OpenVoice
-        archivo_modelo = None
-
-        # Buscar archivos .whisper en la carpeta
-        for archivo_iter in carpeta_modelos.glob("*.openvoice"):
-            if archivo_iter.is_file():
-
-                archivo_modelo = archivo_iter # Asignar el primer archivo encontrado
-
-                break
-
-        # Si se encontró un modelo, cargarlo
-        if archivo_modelo:
-          # Cargar modelo OpenVoice
-          modelo_openvoice = 
-          )
-        else:
-            input('Place a .openvoice model in "model" folder and press Enter...')
+        if not modelo_openvoice:
+          # Buscar archivos .pt en la carpeta
+          for archivo_iter in carpeta_modelos.glob("*.pth"):
+              if archivo_iter.is_file():
+  
+                  archivo_modelo = archivo_iter # Asignar el primer archivo encontrado
+  
+                  break
+  
+          # Si se encontró un modelo, cargarlo
+          if archivo_modelo:
+            # Cargar modelo OpenVoice
+            modelo_openvoice = torch.load(archivo_modelo, map_location = "cpu")
+          else:
+              input('Place a .pth model in "model" folder and press Enter...')
+  
+        # 4. Terminar while si se cargan todos los modelos
+        if modelo_whisper and modelo_llama and modelo_openvoice:
+            break
 
 # PUNTO DE PARTIDA
 cargar_modelos() # Cargar archivos de modelos al iniciar el programa
@@ -178,4 +181,4 @@ print("Start talking")
 # Bucle principal del programa
 while True:
   # 
-  ciclo_conversacion(modelo_whisper, modelo_nlp, modelo_openvoice)
+  ciclo_conversacion(modelo_whisper, modelo_llama, modelo_openvoice)
