@@ -1,7 +1,11 @@
+import os # Módulo para acceder a funciones del sistema operativo
 import pathlib # Manejo de rutas de archivos
+import torch # Framework para manejar tensores y cargar modelos de deep learning
+import sounddevice # Captura y reproducción de audio en tiempo real
+import numpy # Procesamiento numérico eficiente, manejo de arrays para audio
 import whisper # Conversión de voz a texto
 import llama_cpp # Procesamiento de texto a respuesta
-from openvoice import openvoice_cli # Conversión de respuesta en texto a voz
+import openvoice # Conversión de respuesta en texto a voz
 
 # VARIABLES
 modelo_whisper = "" # Ruta hacia el archivo .pt
@@ -11,34 +15,47 @@ modelo_openvoice = "" # Ruta hacia el archivo .pth
 # FUNCIONES
 # Función para leer texto con OpenVoice
 def leer_respuesta(modelo_openvoice, texto_salida, bool_terminado):
-  # Contar número de palabras en texto (formato: texto, espacio)
-  num_palabras = 0
-
-  # 
-  
-  
-  # Detener conteo al llegar a dos (optimiza al evitar contar todas las palabras)
-  if num_palabras > 1:
-    # 
+    # Variables estáticas para rastrear el estado entre llamadas
+    if not hasattr(leer_respuesta, "ultimo_espacio"):
+        leer_respuesta.ultimo_espacio = -1  # Posición del último espacio procesado
     
-  
-  # Leer primera palabra (formato: texto, espacio)
-  if num_palabras == 1:
+    # Buscar el último espacio en el texto actual
+    ultimo_espacio_actual = texto_salida.rfind(" ")
     
-  
-  # Leer penúltima palabra (formato: espacio, texto, espacio)
-  if num_palabras > 1:
-    
-  
-  # Leer última palabra (formato: espacio, texto)
-  if bool_terminado == True:
+    # 1. Primera palabra (formato "palabra ")
+    if leer_respuesta.ultimo_espacio == -1 and ultimo_espacio_actual != -1:
+        primera_palabra = texto_salida[:ultimo_espacio_actual].strip()
         
+        if primera_palabra:
+            openvoice_cli.speak(primera_palabra, modelo_openvoice)
+          
+        leer_respuesta.ultimo_espacio = ultimo_espacio_actual
+    
+    # 2. Palabra intermedia (formato " palabra ")
+    elif ultimo_espacio_actual > leer_respuesta.ultimo_espacio:
+        # Extraer la última palabra completa (entre espacios)
+        inicio_palabra = leer_respuesta.ultimo_espacio + 1
+        palabra_intermedia = texto_salida[inicio_palabra:ultimo_espacio_actual].strip()
+      
+        if palabra_intermedia:
+            openvoice_cli.speak(palabra_intermedia, modelo_openvoice)
+          
+        leer_respuesta.ultimo_espacio = ultimo_espacio_actual
+    
+    # 3. Última palabra (formato " palabra" con bool_terminado=True)
+    if bool_terminado and leer_respuesta.ultimo_espacio < len(texto_salida):
+        ultima_palabra = texto_salida[leer_respuesta.ultimo_espacio + 1:].strip()
+      
+        if ultima_palabra:
+            openvoice_cli.speak(ultima_palabra, modelo_openvoice)
+          
+        leer_respuesta.ultimo_espacio = len(texto_salida)  # Resetear para próxima interacción
 
 # Función para generar respuesta con un modelo Llama
-def generar_respuesta(modelo_llama, texto_salida):
+def generar_respuesta(modelo_llama, texto_prompt):
   # Llama al modelo con los parámetros especificados y retorna la respuesta
-    return modelo_val(
-        texto_entrada, # El texto de entrada (prompt) que se envía al modelo
+    return modelo_llama(
+        texto_prompt, # El texto de entrada (prompt) que se envía al modelo
         max_tokens = 1024, # Máximo número de tokens que puede generar en la respuesta
         temperature = 0.6, # Controla la aleatoriedad (0 = determinista, 1 = muy aleatorio)
         top_p = 0.95, # Muestreo nucleus: considera tokens que sumen determinado porcentaje de probabilidad
@@ -53,39 +70,44 @@ def generar_respuesta(modelo_llama, texto_salida):
 
 # Función para capturar voz con Whisper
 def capturar_voz(modelo_whisper):
-  # Esperar voz del usuario
-
-  
   # Capturar voz
-
+  audio_val = whisper.pad_or_trim(whisper.load_audio(whisper.get_microphone()))
   
   # Generar texto a partir de voz
-  
+  transc_val = modelo_whisper.transcribe(audio_val)
+  texto_entrada = transc_val["text"]
   
   return texto_entrada
 
-# Función para 
-def ciclo_conversacion(modelo_whisper, modelo_llama, modelo_openvoice)
+
+
+
+
+
+
+
+# Función para llevar a cabo conversación entre usuario y máquina
+def ciclo_conversacion(modelo_whisper, modelo_llama, modelo_openvoice):
   # 1. Esperar hasta capturar voz para convertir a texto
   texto_entrada = capturar_voz(modelo_whisper)
   
   # 2. Introducir texto de voz como input para generar respuesta (procesar token por token)
-  texto_salida = f"User: {texto_entrada}\nAssistant:" # Aplicar formato
+  texto_prompt = f"User: {texto_entrada}\nAssistant:" # Aplicar formato
 
   bool_terminado = False # Convertir a True al terminar de generar respuesta
   
   # Generar respuesta token por token
-  for token_salida in generar_respuesta(modelo_llama, texto_salida):
+  for token_salida in generar_respuesta(modelo_llama, texto_prompt):
         # Procesar cada token de la respuesta en streaming
         if 'choices' in token_salida:
             token_val = token_salida['choices'][0].get("text", "") # Extraer el texto del token
 
             # Evaluar si el texto ha terminado de generarse
-            if :
+            if token_salida['choices'][0]['finish_reason'] is not None:
               bool_terminado = True # Convertido a True al terminar de generar respuesta
     
         # 3. Convertir respuesta a voz (leer palabra a palabra)
-        leer_respuesta(modelo_openvoice, texto_salida, bool_terminado)
+        leer_respuesta(modelo_openvoice, token_val, bool_terminado)
 
 # Función para 
 def cargar_modelos():
@@ -148,7 +170,7 @@ def cargar_modelos():
                           vocab_only = False, # No cargar solo el vocabulario
                           rope_scaling_type = llama_cpp.LLAMA_ROPE_SCALING_TYPE_LINEAR, # Tipo de escalado RoPE
                       )
-            else:
+          else:
               input('Place a .gguf model in "model" folder and press Enter...')
 
         # 3. Buscar y cargar modelo OpenVoice
@@ -180,5 +202,5 @@ print("Start talking")
 
 # Bucle principal del programa
 while True:
-  # 
+  # Iniciar el ciclo de captura de voz y lectura de respuesta generada
   ciclo_conversacion(modelo_whisper, modelo_llama, modelo_openvoice)
