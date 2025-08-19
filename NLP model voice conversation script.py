@@ -70,21 +70,58 @@ def generar_respuesta(modelo_llama, texto_prompt):
 
 # Función para capturar voz con Whisper
 def capturar_voz(modelo_whisper):
-  # Capturar voz
-  audio_val = whisper.pad_or_trim(whisper.load_audio(whisper.get_microphone()))
-  
-  # Generar texto a partir de voz
-  transc_val = modelo_whisper.transcribe(audio_val)
-  texto_entrada = transc_val["text"]
-  
-  return texto_entrada
+    frecuencia_val = 16000  # frecuencia de muestreo
+    umbral_db = 30  # nivel de energía en decibelios para iniciar grabación
+    silencio_max = 3.0  # segundos de silencio para detener la grabación
+    bloque_duracion = 0.1  # duración de cada bloque en segundos
+    buffer_audio = [] # 
+    silencio_val = 0 # 
+    grabando_val = False # 
 
+    # 
+    while True:
+        bloque_val = sounddevice.rec(int(bloque_duracion * frecuencia_val), # 
+                                     samplerate = frecuencia_val, # 
+                                     channels = 1, # 
+                                     dtype = numpy.float32 # 
+                                    )
+        
+        sounddevice.wait() # 
+        
+        bloque_val = numpy.squeeze(bloque_val) # 
+        
+        # Convertir RMS a decibelios
+        rms_val = numpy.sqrt(numpy.mean(bloque_val ** 2)) # 
+        
+        decibelios_val = 20 * numpy.log10(rms_val + 1e - 9) # evitar log(0)
 
+        # 
+        if decibelios_val > umbral_db:
+            grabando_val = True # 
+            
+            buffer_audio.extend(bloque_val) # 
+            
+            silencio_val = 0 # 
+        elif grabando_val:
+            buffer_audio.extend(bloque_val) # 
+            
+            silencio_val += bloque_duracion # 
 
+            # 
+            if silencio_val >= silencio_max:
+                
+                break
+    
+    # 
+    audio_numpy = numpy.array(buffer_audio)
 
-
-
-
+    # 
+    resultado_val = modelo_whisper.transcribe(audio_numpy)
+    
+    # 
+    texto_entrada = resultado_val["text"]
+    
+    return texto_entrada_val
 
 # Función para llevar a cabo conversación entre usuario y máquina
 def ciclo_conversacion(modelo_whisper, modelo_llama, modelo_openvoice):
